@@ -17,12 +17,14 @@ migrate_working_dir/
 *.ipr
 *.iws
 .idea/
+backend/venv/
 
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line
 # is commented out by default.
 #.vscode/
 backend/*.json
+backend/*.env
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id

@@ -1,1 +1,6 @@
-fastapi\nuvicorn\nrequests\npython-dotenv
+fastapi==0.95.2
+uvicorn
+requests
+python-dotenv
+pydantic==1.10.15
+python-multipart
