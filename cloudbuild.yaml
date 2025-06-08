@@ -1,0 +1,18 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/t2image', '.']
+    dir: backend
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/t2image']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      [
+        'run', 'deploy', 't2image',
+        '--image', 'gcr.io/$PROJECT_ID/t2image',
+        '--region', 'us-central1',
+        '--allow-unauthenticated',
+        '--set-env-vars', 'STABILITY_API_KEY=$(STABILITY_API_KEY)'
+      ]
+options:
+  logging: CLOUD_LOGGING_ONLY
