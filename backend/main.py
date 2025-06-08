@@ -4,7 +4,10 @@ from dotenv import load_dotenv
 import os
 import requests
 
-# Load biến môi trường từ file .env
+from langdetect import detect
+from googletrans import Translator
+
+# Load biến môi trường (dùng cho local dev, không cần khi deploy Cloud Run)
 load_dotenv(dotenv_path='D:/T2I/backend/.env')
 
 STABILITY_API_KEY = os.getenv("STABILITY_API_KEY")
@@ -15,28 +18,37 @@ app = FastAPI()
 class ImagePrompt(BaseModel):
     prompt: str
 
+def ensure_english(prompt: str) -> str:
+    try:
+        lang = detect(prompt)
+    except Exception:
+        lang = 'en'
+    if lang != 'en':
+        translator = Translator()
+        translated = translator.translate(prompt, dest='en')
+        print(f"[Auto-translate] Dịch từ {lang} sang en: '{prompt}' -> '{translated.text}'")
+        return translated.text
+    return prompt
+
 @app.post("/generate-image")
 def generate_image(prompt_in: ImagePrompt):
     """
-    Sinh ảnh bằng Stability AI API. Nếu lỗi trả về ảnh demo.
+    Nhận prompt, auto detect & dịch sang tiếng Anh nếu cần, gửi sang Stability AI, trả về ảnh.
     """
     try:
+        # Auto detect và dịch prompt nếu không phải tiếng Anh
+        prompt = ensure_english(prompt_in.prompt)
         api_host = "https://api.stability.ai"
-        engine_id = "stable-diffusion-xl-1024-v1-0"  # Model tốt nhất, có thể đổi sang 'stable-diffusion-v1-5' nếu muốn
+        engine_id = "stable-diffusion-xl-1024-v1-0"
 
         url = f"{api_host}/v1/generation/{engine_id}/text-to-image"
-
         headers = {
             "Authorization": f"Bearer {STABILITY_API_KEY}",
             "Accept": "application/json"
         }
         payload = {
-            "text_prompts": [
-                {
-                    "text": prompt_in.prompt
-                }
-            ],
-            "cfg_scale": 7,  # độ chi tiết ảnh
+            "text_prompts": [{"text": prompt}],
+            "cfg_scale": 7,
             "height": 1024,
             "width": 1024,
             "samples": 1,
@@ -49,11 +61,7 @@ def generate_image(prompt_in: ImagePrompt):
             # Stability AI trả về ảnh base64
             if "artifacts" in res and len(res["artifacts"]) > 0:
                 base64_image = res["artifacts"][0]["base64"]
-                # Bạn có thể trả về base64 hoặc convert sang URL tạm (tuỳ UI/frontend)
-                return {
-                    "image_base64": base64_image,
-                    "mode": "stability"
-                }
+                return {"image_base64": base64_image, "mode": "stability"}
         else:
             print("Stability API ERROR:", response.status_code, response.text)
             raise Exception(f"Stability AI API error: {response.status_code}, {response.text}")
