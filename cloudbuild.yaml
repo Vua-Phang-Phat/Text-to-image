@@ -13,7 +13,6 @@ steps:
         '--image', 'gcr.io/$PROJECT_ID/t2image',
         '--region', 'us-central1',
         '--allow-unauthenticated',
-        '--set-env-vars', 'STABILITY_API_KEY=$$STABILITY_API_KEY'
       ]
 availableSecrets:
   secretManager:
