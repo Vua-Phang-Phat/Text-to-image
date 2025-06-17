@@ -1,8 +1,8 @@
-fastapi==0.95.2
-uvicorn
-requests
-python-dotenv
-pydantic==1.10.15
-python-multipart
-langdetect 
+fastapi==0.110.2
+uvicorn==0.29.0
+requests==2.32.3
+pydantic==1.10.14
+google-auth==2.29.0
+google-auth-oauthlib==1.2.0
 googletrans==4.0.0-rc1
+langdetect

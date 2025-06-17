@@ -1,29 +1,25 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../models/image_result.dart';
+import '../models/image_response.dart';
 
 class ApiService {
-  static const String baseUrl = 'https://t2image-394672402684.us-central1.run.app';
+  static const String baseUrl = 'http://192.168.1.40:8000';
 
-  static Future<ImageResult?> generateImage(String prompt) async {
-    final url = Uri.parse('$baseUrl/generate-image');
+  static Future<ImageResponse> generateImage(String prompt, int width, int height) async {
     final response = await http.post(
-      url,
+      Uri.parse('$baseUrl/generate-image'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'prompt': prompt}),
+      body: jsonEncode({
+        'prompt': prompt,
+        'width': width,
+        'height': height,
+      }),
     );
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      // Nếu API trả về image_base64
-      if (data.containsKey('image_base64')) {
-        return ImageResult.fromBase64(data['image_base64']);
-      }
-      // Nếu API trả về image_url (demo hoặc lỗi)
-      if (data.containsKey('image_url')) {
-        return ImageResult.fromUrl(data['image_url']);
-      }
+      return ImageResponse.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception('Lỗi sinh ảnh: ${response.body}');
     }
-    return null;
   }
 }

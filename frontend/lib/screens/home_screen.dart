@@ -1,82 +1,104 @@
 import 'package:flutter/material.dart';
-import '../widgets/prompt_input.dart';
 import '../services/api_service.dart';
-import '../models/image_result.dart';
-import 'result_screen.dart';
+import '../widgets/image_viewer.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final TextEditingController _promptController = TextEditingController();
-  bool _loading = false;
+  final _promptController = TextEditingController();
+  String? imageBase64;
+  bool isLoading = false;
 
-  void _generateImage() async {
-    FocusScope.of(context).unfocus();
-    final prompt = _promptController.text.trim();
-    if (prompt.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bạn chưa nhập mô tả!')),
-      );
-      return;
+  // Danh sách các style nghệ thuật
+  final List<String> styles = [
+    'Realistic',
+    'Cartoon',
+    'Anime',
+    'Oil Painting',
+    'Watercolor',
+    'Pixel Art',
+    'Cyberpunk',
+    'Minimalist',
+    '3D render',
+    'Surrealism',
+    'Abstract',
+    'Fantasy',
+    'Portrait',
+    'Landscape',
+  ];
+  String _selectedStyle = 'Realistic';
+
+  String stylePrompt(String basePrompt, String style) {
+    if (style == 'Realistic') return basePrompt;
+    return '$basePrompt, in $style style';
+  }
+
+  Future<void> _generateImage() async {
+    setState(() {
+      isLoading = true;
+      imageBase64 = null;
+    });
+    try {
+      final promptToSend = stylePrompt(_promptController.text, _selectedStyle);
+      final img = await ApiService.generateImage(promptToSend, 1024, 1024);
+      setState(() => imageBase64 = img.imageBase64);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
-    setState(() => _loading = true);
-
-    final ImageResult? result = await ApiService.generateImage(prompt);
-
-    setState(() => _loading = false);
-
-    if (result != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ResultScreen(imageResult: result),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lỗi tạo ảnh!')),
-      );
-    }
+    setState(() {
+      isLoading = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sinh ảnh từ mô tả'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Text2Image')),
       body: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            PromptInput(
+            TextField(
               controller: _promptController,
-              onSubmitted: _generateImage,
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.image),
-                label: _loading
-                    ? const SizedBox(
-                        width: 20, height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Tạo ảnh'),
-                onPressed: _loading ? null : _generateImage,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  textStyle: const TextStyle(fontSize: 18),
-                ),
+              decoration: const InputDecoration(
+                labelText: 'Nhập prompt (Anh/Việt/Song ngữ)',
               ),
             ),
+            const SizedBox(height: 16),
+            // Dropdown chọn style
+            DropdownButton<String>(
+              value: _selectedStyle,
+              isExpanded: true,
+              items: styles
+                  .map((s) => DropdownMenuItem(
+                        value: s,
+                        child: Text(s),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedStyle = value!;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: isLoading ? null : _generateImage,
+              child: isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Sinh ảnh'),
+            ),
+            const SizedBox(height: 24),
+            if (imageBase64 != null) ImageViewer(imageBase64: imageBase64!),
           ],
         ),
       ),

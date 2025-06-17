@@ -7,15 +7,10 @@ void main() {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Text-to-Image',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true, // Nếu bạn muốn Material3
-      ),
+      title: 'Text2Image',
       home: const HomeScreen(),
       debugShowCheckedModeBanner: false,
     );
