@@ -1,85 +1,67 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from google.oauth2 import service_account
+from google.auth import default
 from google.auth.transport.requests import Request
 import requests
 import json
 import os
-import base64
 from langdetect import detect
 from googletrans import Translator
-
-# Đường dẫn file service account
-SERVICE_ACCOUNT_FILE = "D:/T2I/backend/t2image-463005-549d95606f41.json"  
 
 # Cấu hình FastAPI
 app = FastAPI()
 
-# Thêm CORS
+# Cho phép tất cả origin gọi API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Model dữ liệu request
+# Model dữ liệu cho request
 class ImageRequest(BaseModel):
     prompt: str
     width: int = 1024
     height: int = 1024
 
+# Hàm dịch prompt sang tiếng Anh nếu cần
 def prompt_to_english(prompt: str) -> str:
-    """
-    Dịch prompt sang tiếng Anh nếu là tiếng Việt hoặc bất kỳ ngôn ngữ khác, giữ nguyên nếu đã là tiếng Anh.
-    """
     try:
         lang = detect(prompt)
         if lang != "en":
-            try:
-                translated = Translator().translate(prompt, dest="en").text
-                return translated
-            except Exception:
-                return prompt
-        else:
-            return prompt
+            return Translator().translate(prompt, dest="en").text
+        return prompt
     except Exception:
-        # Nếu không xác định được ngôn ngữ, giữ nguyên prompt
         return prompt
 
 @app.post("/generate-image")
 def generate_image(req: ImageRequest):
     try:
-        # Dịch toàn bộ prompt sang tiếng Anh
+        # Dịch prompt sang tiếng Anh nếu cần
         prompt_en = prompt_to_english(req.prompt)
 
-        # Lấy access token OAuth2
-        creds = service_account.Credentials.from_service_account_file(
-            SERVICE_ACCOUNT_FILE,
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
+        # Lấy access token từ Application Default Credentials (Cloud Run)
+        creds, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
         creds.refresh(Request())
         access_token = creds.token
 
-        # Endpoint Vertex AI 
-        url = "https://us-central1-aiplatform.googleapis.com/v1/projects/t2image-463005/locations/us-central1/publishers/google/models/imagegeneration:predict"
+        # Đọc thông tin cấu hình từ biến môi trường
+        project_id = os.environ.get("PROJECT_ID")
+        location = os.environ.get("LOCATION", "us-central1")
+        model_id = os.environ.get("MODEL_ID", "imagegeneration")
 
-        # Tạo header chuẩn
+        # Gọi đến Vertex AI
+        url = f"https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/google/models/{model_id}:predict"
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
         }
 
-        # Payload gửi lên
         payload = {
-            "instances": [
-                {
-                    "prompt": prompt_en 
-                }
-            ],
+            "instances": [{"prompt": prompt_en}],
             "parameters": {
                 "sampleCount": 1,
                 "imageHeight": req.height,
@@ -87,25 +69,16 @@ def generate_image(req: ImageRequest):
             }
         }
 
-        # Gửi request đến Vertex AI
         response = requests.post(url, headers=headers, data=json.dumps(payload))
+
         if response.status_code == 200:
             result = response.json()
-            # Kiểm tra trường kết quả
             try:
                 image_base64 = result["predictions"][0]["bytesBase64Encoded"]
+                return {"image_base64": image_base64}
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Lỗi đọc kết quả: {e}\n{result}")
-            return {"image_base64": image_base64}
         else:
-            # Trả về thông báo lỗi chi tiết từ Vertex AI
             raise HTTPException(status_code=response.status_code, detail=response.text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/download-image/{image_id}")
-def download_image(image_id: str):
-    file_path = f"output/{image_id}.png"
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Không tìm thấy ảnh!")
-    return FileResponse(file_path, media_type="image/png", filename=f"image_{image_id}.png")
