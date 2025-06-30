@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -24,21 +25,33 @@ location = os.environ.get("GCP_REGION", "us-central1")
 model_name = os.environ.get("MODEL_NAME", "publishers/google/models/imagegeneration")
 
 def get_creds_and_token():
-    # Nếu chạy trên Cloud Run hoặc GCP, dùng credentials mặc định (KHÔNG đọc file key)
+    # Nếu chạy trên Cloud Run hoặc GCP, dùng credentials mặc định
     if os.environ.get("K_SERVICE") or os.environ.get("CLOUD_RUN_JOB") or os.environ.get("GAE_ENV"):
         from google.auth import default
         creds, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
         creds.refresh(Request())
         return creds, creds.token
-    else:
-        # Chỉ dùng file key khi chạy LOCAL
-        service_account_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "./t2image-463005-549d95606f41.json")
+    # Nếu có biến môi trường GOOGLE_APPLICATION_CREDENTIALS và file tồn tại, dùng file JSON
+    elif os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") and os.path.exists(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")):
+        from google.oauth2 import service_account
         creds = service_account.Credentials.from_service_account_file(
-            service_account_path,
+            os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"),
             scopes=["https://www.googleapis.com/auth/cloud-platform"]
         )
         creds.refresh(Request())
         return creds, creds.token
+    # Nếu có file JSON ở local mặc định, dùng luôn
+    elif os.path.exists("./t2image-463005-549d95606f41.json"):
+        from google.oauth2 import service_account
+        creds = service_account.Credentials.from_service_account_file(
+            "./t2image-463005-549d95606f41.json",
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        creds.refresh(Request())
+        return creds, creds.token
+    else:
+        raise RuntimeError("Không tìm thấy credentials nào phù hợp để gọi Google API.")
+
 
 
 # Cấu hình FastAPI
