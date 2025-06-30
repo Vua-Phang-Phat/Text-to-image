@@ -12,23 +12,33 @@ from uuid import uuid4
 from dotenv import load_dotenv
 from langdetect import detect
 from googletrans import Translator
+from google.cloud import storage 
 
 # Load biến môi trường từ file .env
 load_dotenv()
 
 # Lấy thông tin cấu hình từ biến môi trường
-service_account_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "./t2image-463005-549d95606f41.json")
+# service_account_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "./t2image-463005-549d95606f41.json")
 project_id = os.environ.get("PROJECT_ID")
 location = os.environ.get("GCP_REGION", "us-central1")
 model_name = os.environ.get("MODEL_NAME", "publishers/google/models/imagegeneration")
 
-# Load credentials từ file Service Account JSON 
-creds = service_account.Credentials.from_service_account_file(
-    service_account_path,
-    scopes=["https://www.googleapis.com/auth/cloud-platform"]
-)
-creds.refresh(Request())
-print("🔐 Project ID từ file JSON:", creds.project_id)  # In ra project đang dùng thật sự
+def get_creds_and_token():
+    # Nếu chạy trên Cloud Run hoặc GCP, dùng credentials mặc định
+    if os.environ.get("K_SERVICE") or os.environ.get("CLOUD_RUN_JOB") or os.environ.get("GAE_ENV"):
+        from google.auth import default
+        creds, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        creds.refresh(Request())
+        return creds, creds.token
+    else:
+        service_account_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "./t2image-463005-549d95606f41.json")
+        creds = service_account.Credentials.from_service_account_file(
+            service_account_path,
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        creds.refresh(Request())
+        return creds, creds.token
+
 
 # Cấu hình FastAPI
 app = FastAPI()
@@ -58,12 +68,14 @@ def prompt_to_english(prompt: str) -> str:
     except Exception:
         return prompt
 
+
 # API sinh ảnh từ prompt
 @app.post("/generate-image")
 def generate_image(req: ImageRequest):
     try:
         prompt_en = prompt_to_english(req.prompt)
-        access_token = creds.token
+        _, access_token = get_creds_and_token()
+        # access_token = creds.token
 
         url = f"https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/{model_name}:predict"
         headers = {
@@ -122,3 +134,8 @@ def share_image(filename: str):
         "message": "Đây là link chia sẻ tạm thời",
         "share_link": f"http://127.0.0.1:8000/download-image/{filename}"
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8080))   # Cloud Run truyền biến môi trường PORT=8080
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
