@@ -24,13 +24,14 @@ location = os.environ.get("GCP_REGION", "us-central1")
 model_name = os.environ.get("MODEL_NAME", "publishers/google/models/imagegeneration")
 
 def get_creds_and_token():
-    # Nếu chạy trên Cloud Run hoặc GCP, dùng credentials mặc định
+    # Nếu chạy trên Cloud Run hoặc GCP, dùng credentials mặc định (KHÔNG đọc file key)
     if os.environ.get("K_SERVICE") or os.environ.get("CLOUD_RUN_JOB") or os.environ.get("GAE_ENV"):
         from google.auth import default
         creds, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
         creds.refresh(Request())
         return creds, creds.token
     else:
+        # Chỉ dùng file key khi chạy LOCAL
         service_account_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "./t2image-463005-549d95606f41.json")
         creds = service_account.Credentials.from_service_account_file(
             service_account_path,
