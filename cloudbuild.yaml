@@ -11,7 +11,6 @@ steps:
         'run', 'deploy', 't2image',
         '--image', 'gcr.io/$PROJECT_ID/t2image',
         '--region', 'us-central1',
-        '--platform','managed',
         '--allow-unauthenticated',
       ]
 options:
