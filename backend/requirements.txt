@@ -6,3 +6,4 @@ google-auth==2.29.0
 google-auth-oauthlib==1.2.0
 googletrans==4.0.0-rc1
 langdetect
+python-dotenv
