@@ -10,11 +10,11 @@ from uuid import uuid4
 from langdetect import detect
 from googletrans import Translator
 
-# --------- CHỈ GIỮ NHỮNG DÒNG NÀY ----------
-project_id = os.environ.get("PROJECT_ID")      # Nên truyền biến môi trường khi deploy
+# --------- ĐỌC BIẾN MÔI TRƯỜNG ---------
+project_id = os.environ.get("PROJECT_ID")  # export PROJECT_ID khi deploy
 location = os.environ.get("GCP_REGION", "us-central1")
 model_name = os.environ.get("MODEL_NAME", "publishers/google/models/imagegeneration")
-# --------------------------------------------
+# ----------------------------------------
 
 def get_creds_and_token():
     import google.auth
