@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/image_response.dart';
 
 class ApiService {
-  static const String baseUrl = "http://127.0.0.1:8000";
+  static const String baseUrl = "https://t2image-875771204141.us-central1.run.app";
 
   static Future<ImageResponse> generateImage(String prompt, int width, int height) async {
     final url = Uri.parse('$baseUrl/generate-image');
