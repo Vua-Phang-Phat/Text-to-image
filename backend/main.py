@@ -7,44 +7,24 @@ import json
 import os
 import base64
 from uuid import uuid4
-from dotenv import load_dotenv
 from langdetect import detect
 from googletrans import Translator
 
-# Load biến môi trường từ file .env (chỉ local mới dùng)
-load_dotenv()
-
-# Lấy thông tin cấu hình từ biến môi trường
-project_id = os.environ.get("PROJECT_ID")
+# --------- CHỈ GIỮ NHỮNG DÒNG NÀY ----------
+project_id = os.environ.get("PROJECT_ID")      # Nên truyền biến môi trường khi deploy
 location = os.environ.get("GCP_REGION", "us-central1")
 model_name = os.environ.get("MODEL_NAME", "publishers/google/models/imagegeneration")
+# --------------------------------------------
 
 def get_creds_and_token():
-    try:
-        # Nếu đang chạy trên Google Cloud (Cloud Run, App Engine, GCE), sẽ tự động dùng credentials mặc định
-        import google.auth
-        from google.auth.transport.requests import Request
-        creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-        creds.refresh(Request())
-        return creds, creds.token
-    except Exception:
-        # Nếu chạy local và có file JSON key, dùng nó
-        from google.oauth2 import service_account
-        from google.auth.transport.requests import Request
-        key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "./t2image-463005-549d95606f41.json")
-        if os.path.exists(key_path):
-            creds = service_account.Credentials.from_service_account_file(
-                key_path,
-                scopes=["https://www.googleapis.com/auth/cloud-platform"]
-            )
-            creds.refresh(Request())
-            return creds, creds.token
-        raise RuntimeError("Không tìm thấy credentials nào phù hợp để gọi Google API.")
+    import google.auth
+    from google.auth.transport.requests import Request
+    creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+    creds.refresh(Request())
+    return creds, creds.token
 
-# Cấu hình FastAPI
 app = FastAPI()
 
-# Cho phép tất cả origin gọi API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -53,13 +33,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Model dữ liệu cho request
 class ImageRequest(BaseModel):
     prompt: str
     width: int = 1024
     height: int = 1024
 
-# Hàm dịch prompt sang tiếng Anh
 def prompt_to_english(prompt: str) -> str:
     try:
         lang = detect(prompt)
@@ -69,7 +47,6 @@ def prompt_to_english(prompt: str) -> str:
     except Exception:
         return prompt
 
-# API sinh ảnh từ prompt
 @app.post("/generate-image")
 def generate_image(req: ImageRequest):
     try:
@@ -114,7 +91,6 @@ def generate_image(req: ImageRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# API tải ảnh 
 @app.get("/download-image/{filename}")
 def download_image(filename: str):
     file_path = os.path.join("generated", filename)
@@ -122,15 +98,14 @@ def download_image(filename: str):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path, media_type="image/png", filename=filename)
 
-# API chia sẻ ảnh 
 @app.get("/share-image/{filename}")
 def share_image(filename: str):
     return {
         "message": "Đây là link chia sẻ tạm thời",
-        "share_link": f"http://127.0.0.1:8000/download-image/{filename}"
+        "share_link": f"/download-image/{filename}"
     }
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8080))   # Cloud Run truyền biến môi trường PORT=8080
+    port = int(os.environ.get("PORT", 8080))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
