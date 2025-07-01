@@ -2,29 +2,25 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-import requests
-import json
+from dotenv import load_dotenv
 import os
+import json
+import requests
 import base64
-from uuid import uuid4
 from langdetect import detect
 from googletrans import Translator
+from google.oauth2 import service_account
+from google.auth.transport.requests import Request
 
-# --------- ĐỌC BIẾN MÔI TRƯỜNG ---------
-project_id = os.environ.get("PROJECT_ID")  # export PROJECT_ID khi deploy
-location = os.environ.get("GCP_REGION", "us-central1")
-model_name = os.environ.get("MODEL_NAME", "publishers/google/models/imagegeneration")
-# ----------------------------------------
+# Load biến môi trường từ file .env (chỉ dùng khi chạy local)
+load_dotenv(dotenv_path='D:/T2I/backend/.env')
 
-def get_creds_and_token():
-    import google.auth
-    from google.auth.transport.requests import Request
-    creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-    creds.refresh(Request())
-    return creds, creds.token
+SERVICE_ACCOUNT_FILE = "D:/T2I/backend/t2image-463005-549d95606f41.json"  
+DEMO_IMAGE_URL = "https://placehold.co/512x512/png?text=Demo+Image"
 
 app = FastAPI()
 
+# Thêm CORS cho phép mọi domain
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -42,24 +38,41 @@ def prompt_to_english(prompt: str) -> str:
     try:
         lang = detect(prompt)
         if lang != "en":
-            return Translator().translate(prompt, dest="en").text
+            translated = Translator().translate(prompt, dest="en").text
+            print(f"[Auto-translate] '{prompt}' ({lang}) => '{translated}'")
+            return translated
         return prompt
-    except Exception:
+    except Exception as e:
+        print("Langdetect error:", e)
         return prompt
 
 @app.post("/generate-image")
 def generate_image(req: ImageRequest):
     try:
+        # Tự động dịch prompt sang tiếng Anh 
         prompt_en = prompt_to_english(req.prompt)
-        _, access_token = get_creds_and_token()
 
-        url = f"https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/{model_name}:predict"
+        # Lấy access token OAuth2 cho Vertex AI
+        creds = service_account.Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE,
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        creds.refresh(Request())
+        access_token = creds.token
+
+        # Endpoint Vertex AI 
+        url = "https://us-central1-aiplatform.googleapis.com/v1/projects/t2image-463005/locations/us-central1/publishers/google/models/imagegeneration:predict"
+
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
         }
         payload = {
-            "instances": [{"prompt": prompt_en}],
+            "instances": [
+                {
+                    "prompt": prompt_en
+                }
+            ],
             "parameters": {
                 "sampleCount": 1,
                 "imageHeight": req.height,
@@ -67,45 +80,29 @@ def generate_image(req: ImageRequest):
             }
         }
 
-        response = requests.post(url, headers=headers, data=json.dumps(payload))
-
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=60)
         if response.status_code == 200:
             result = response.json()
+            # Trả về ảnh base64 nếu thành công
             try:
                 image_base64 = result["predictions"][0]["bytesBase64Encoded"]
-                image_data = base64.b64decode(image_base64)
-                file_name = f"{uuid4().hex}.png"
-                os.makedirs("generated", exist_ok=True)
-                file_path = os.path.join("generated", file_name)
-                with open(file_path, "wb") as f:
-                    f.write(image_data)
-                return {
-                    "image_base64": image_base64,
-                    "download_url": f"/download-image/{file_name}",
-                    "share_url": f"/share-image/{file_name}"
-                }
+                return {"image_base64": image_base64}
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Lỗi đọc kết quả: {e}\n{result}")
         else:
             raise HTTPException(status_code=response.status_code, detail=response.text)
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print("ERROR:", e)
+        return {
+            "image_url": DEMO_IMAGE_URL,
+            "mode": "demo",
+            "message": f"Demo mode: {str(e)}"
+        }
 
-@app.get("/download-image/{filename}")
-def download_image(filename: str):
-    file_path = os.path.join("generated", filename)
+@app.get("/download-image/{image_id}")
+def download_image(image_id: str):
+    file_path = f"output/{image_id}.png"
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(file_path, media_type="image/png", filename=filename)
-
-@app.get("/share-image/{filename}")
-def share_image(filename: str):
-    return {
-        "message": "Đây là link chia sẻ tạm thời",
-        "share_link": f"/download-image/{filename}"
-    }
-
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+        raise HTTPException(status_code=404, detail="Không tìm thấy ảnh!")
+    return FileResponse(file_path, media_type="image/png", filename=f"image_{image_id}.png")
