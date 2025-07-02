@@ -1,26 +1,24 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 import json
 import requests
 import base64
+import uuid
 from langdetect import detect
 from googletrans import Translator
-from google.oauth2 import service_account
-from google.auth.transport.requests import Request
+from google.auth.transport.requests import Request, default
 
-# Load biến môi trường từ file .env (chỉ dùng khi chạy local)
+# Load .env khi local
 load_dotenv(dotenv_path='D:/T2I/backend/.env')
 
-SERVICE_ACCOUNT_FILE = "D:/T2I/backend/t2image-463005-549d95606f41.json"  
 DEMO_IMAGE_URL = "https://placehold.co/512x512/png?text=Demo+Image"
 
 app = FastAPI()
-
-# Thêm CORS cho phép mọi domain
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,6 +26,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+IMAGE_DIR = "images"
+os.makedirs(IMAGE_DIR, exist_ok=True)
+app.mount("/images", StaticFiles(directory=IMAGE_DIR), name="images")
 
 class ImageRequest(BaseModel):
     prompt: str
@@ -49,30 +51,20 @@ def prompt_to_english(prompt: str) -> str:
 @app.post("/generate-image")
 def generate_image(req: ImageRequest):
     try:
-        # Tự động dịch prompt sang tiếng Anh 
         prompt_en = prompt_to_english(req.prompt)
 
-        # Lấy access token OAuth2 cho Vertex AI
-        creds = service_account.Credentials.from_service_account_file(
-            SERVICE_ACCOUNT_FILE,
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
+        # Lấy credentials mặc định Cloud Run
+        creds, project = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
         creds.refresh(Request())
         access_token = creds.token
 
-        # Endpoint Vertex AI 
         url = "https://us-central1-aiplatform.googleapis.com/v1/projects/t2image-463005/locations/us-central1/publishers/google/models/imagegeneration:predict"
-
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
         }
         payload = {
-            "instances": [
-                {
-                    "prompt": prompt_en
-                }
-            ],
+            "instances": [{"prompt": prompt_en}],
             "parameters": {
                 "sampleCount": 1,
                 "imageHeight": req.height,
@@ -83,10 +75,19 @@ def generate_image(req: ImageRequest):
         response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=60)
         if response.status_code == 200:
             result = response.json()
-            # Trả về ảnh base64 nếu thành công
             try:
                 image_base64 = result["predictions"][0]["bytesBase64Encoded"]
-                return {"image_base64": image_base64}
+                filename = f"{uuid.uuid4().hex}.png"
+                file_path = os.path.join(IMAGE_DIR, filename)
+                with open(file_path, "wb") as f:
+                    f.write(base64.b64decode(image_base64))
+                domain = os.environ.get('DOMAIN', 't2image-875771204141.us-central1.run.app')
+                download_url = f"https://{domain}/images/{filename}"
+                return {
+                    "image_base64": image_base64,
+                    "download_url": download_url,
+                    "share_url": download_url
+                }
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Lỗi đọc kết quả: {e}\n{result}")
         else:
@@ -100,9 +101,9 @@ def generate_image(req: ImageRequest):
             "message": f"Demo mode: {str(e)}"
         }
 
-@app.get("/download-image/{image_id}")
-def download_image(image_id: str):
-    file_path = f"output/{image_id}.png"
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Không tìm thấy ảnh!")
-    return FileResponse(file_path, media_type="image/png", filename=f"image_{image_id}.png")
+@app.get("/download/{filename}")
+def download_image(filename: str):
+    file_path = os.path.join(IMAGE_DIR, filename)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Không tìm thấy file")
+    return FileResponse(file_path, filename=filename, media_type="image/png")

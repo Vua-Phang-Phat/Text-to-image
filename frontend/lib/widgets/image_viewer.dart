@@ -1,56 +1,70 @@
-import 'dart:typed_data';
-import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:image_downloader/image_downloader.dart';
+import 'package:share_plus/share_plus.dart';
 
+// model thực tế 
 class ImageViewer extends StatelessWidget {
-  final String imageBase64;
-  const ImageViewer({super.key, required this.imageBase64});
+  final String imageUrl;      // Link public ảnh trả về từ backend
+  final String base64Image;   // Có thể truyền nếu muốn hiển thị nhanh
+  final String? shareUrl;     // Nếu có trường riêng cho chia sẻ link
 
-  Future<void> downloadImage(BuildContext context) async {
+  const ImageViewer({
+    Key? key,
+    required this.imageUrl,
+    required this.base64Image,
+    this.shareUrl,
+  }) : super(key: key);
+
+  Future<void> _downloadImage(BuildContext context) async {
     try {
-      Uint8List bytes = base64Decode(imageBase64);
-
-      // Xin quyền lưu Android
-      await Permission.storage.request();
-
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/image_${DateTime.now().millisecondsSinceEpoch}.png');
-      await file.writeAsBytes(bytes);
-
+      await ImageDownloader.downloadImage(imageUrl);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Đã lưu ảnh: ${file.path}')),
+        SnackBar(content: Text('Đã tải ảnh vào thư viện!')),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi khi lưu ảnh: $e')),
+        SnackBar(content: Text('Tải ảnh thất bại!')),
       );
     }
   }
 
+  void _shareImage(BuildContext context) {
+    // Nếu muốn chỉ share link, dùng imageUrl hoặc shareUrl
+    Share.share(shareUrl ?? imageUrl, subject: "Xem ảnh AI này nè!");
+  }
+
   @override
   Widget build(BuildContext context) {
-    Uint8List bytes = base64Decode(imageBase64);
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          SizedBox(
-            height: 320, 
-            child: Image.memory(
-              bytes,
-              fit: BoxFit.contain,
+    // Hiển thị ảnh bằng link public luôn cho tối ưu bộ nhớ
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Hiển thị ảnh từ link public
+        Image.network(
+          imageUrl,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return Text('Không tải được ảnh!');
+          },
+        ),
+        const SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton.icon(
+              onPressed: () => _downloadImage(context),
+              icon: Icon(Icons.download),
+              label: Text('Tải về'),
             ),
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.download),
-            label: const Text('Tải về'),
-            onPressed: () => downloadImage(context),
-          ),
-        ],
-      ),
+            const SizedBox(width: 16),
+            ElevatedButton.icon(
+              onPressed: () => _shareImage(context),
+              icon: Icon(Icons.share),
+              label: Text('Chia sẻ'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
