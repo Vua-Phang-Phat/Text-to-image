@@ -11,7 +11,9 @@ import base64
 import uuid
 from langdetect import detect
 from googletrans import Translator
-from google.auth.transport.requests import Request, default
+from google.auth.transport.requests import Request
+from google.auth import default
+
 
 # Load .env khi local
 load_dotenv(dotenv_path='D:/T2I/backend/.env')
