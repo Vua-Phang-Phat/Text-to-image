@@ -1,0 +1,4 @@
+#Sat Jul 05 10:38:14 ICT 2025
+base.0=D\:\\T2I\\frontend\\build\\app\\intermediates\\dex\\release\\minifyReleaseWithR8\\classes.dex
+path.0=classes.dex
+renamed.0=classes.dex
