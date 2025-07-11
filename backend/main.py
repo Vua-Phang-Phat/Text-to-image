@@ -23,7 +23,7 @@ db = firestore.Client(database="sql1999")
 HISTORY_COLLECTION = "search_history"
 
 BUCKET_NAME = "t2image-bucket"  # Tên bucket bạn đã tạo trên Cloud Storage
-def upload_to_bucket(file_bytes, filename, bucket_name=t2image-bucket)
+def upload_to_bucket(file_bytes, filename, bucket_name=bucket_name)
     client = storage.Client()
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(filename)
