@@ -28,7 +28,7 @@ def upload_to_bucket(file_bytes, filename, bucket_name=BUCKET_NAME):
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(filename)
     blob.upload_from_string(file_bytes, content_type="image/png")
-    return blob.public_url
+    return f"https://storage.googleapis.com/{bucket_name}/{filename}"
 
 # Load .env khi local
 load_dotenv(dotenv_path='D:/T2I/backend/.env')
