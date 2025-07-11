@@ -14,6 +14,7 @@ from googletrans import Translator
 from google.auth.transport.requests import Request
 from google.auth import default
 
+from google.cloud import storage
 from google.cloud import firestore
 from datetime import datetime
 from fastapi import Query
@@ -21,7 +22,14 @@ from fastapi import Query
 db = firestore.Client(database="sql1999")
 HISTORY_COLLECTION = "search_history"
 
-
+BUCKET_NAME = "t2image-bucket"  # Tên bucket bạn đã tạo trên Cloud Storage
+def upload_to_bucket(file_bytes, filename, bucket_name=BUCKET_NAME):
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(filename)
+    blob.upload_from_string(file_bytes, content_type="image/png")
+    blob.make_public()  # Đảm bảo ảnh public
+    return blob.public_url
 
 # Load .env khi local
 load_dotenv(dotenv_path='D:/T2I/backend/.env')
@@ -93,6 +101,7 @@ def generate_image(req: ImageRequest):
                     f.write(base64.b64decode(image_base64))
                 domain = os.environ.get('DOMAIN', 't2image-875771204141.us-central1.run.app')
                 download_url = f"https://{domain}/images/{filename}"
+                download_url = upload_to_bucket(file_bytes, filename)
                 save_search_history(req.prompt, download_url)
                 return {
                     "image_base64": image_base64,
