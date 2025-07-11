@@ -9,4 +9,5 @@ langdetect
 google-cloud-storage
 google-api-python-client
 python-dotenv
+google-cloud-firestore
 
