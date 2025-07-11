@@ -28,7 +28,6 @@ def upload_to_bucket(file_bytes, filename, bucket_name=BUCKET_NAME):
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(filename)
     blob.upload_from_string(file_bytes, content_type="image/png")
-    blob.make_public()  # Đảm bảo ảnh public
     return blob.public_url
 
 # Load .env khi local
