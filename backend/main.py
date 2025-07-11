@@ -14,6 +14,14 @@ from googletrans import Translator
 from google.auth.transport.requests import Request
 from google.auth import default
 
+from google.cloud import firestore
+from datetime import datetime
+from fastapi import Query
+# định nghĩa model lịch sử
+db = firestore.Client()
+HISTORY_COLLECTION = "search_history"
+
+
 
 # Load .env khi local
 load_dotenv(dotenv_path='D:/T2I/backend/.env')
@@ -85,10 +93,12 @@ def generate_image(req: ImageRequest):
                     f.write(base64.b64decode(image_base64))
                 domain = os.environ.get('DOMAIN', 't2image-875771204141.us-central1.run.app')
                 download_url = f"https://{domain}/images/{filename}"
+                save_search_history(req.prompt, download_url)
                 return {
                     "image_base64": image_base64,
                     "download_url": download_url,
-                    "share_url": download_url
+                    "share_url": download_url,
+                    "image_url": download_url,
                 }
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Lỗi đọc kết quả: {e}\n{result}")
@@ -102,6 +112,16 @@ def generate_image(req: ImageRequest):
             "mode": "demo",
             "message": f"Demo mode: {str(e)}"
         }
+def save_search_history(prompt, image_url, user_id=None):
+    doc = {
+        "prompt": prompt,
+        "image_url": image_url,
+        "created_at": datetime.utcnow(),
+    }
+    if user_id:
+        doc["user_id"] = user_id
+    db.collection(HISTORY_COLLECTION).add(doc)
+
 
 @app.get("/download/{filename}")
 def download_image(filename: str):
@@ -109,3 +129,15 @@ def download_image(filename: str):
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Không tìm thấy file")
     return FileResponse(file_path, filename=filename, media_type="image/png")
+
+@app.get("/search-history")
+def get_search_history(limit: int = Query(20), user_id: str = None):
+    q = db.collection(HISTORY_COLLECTION).order_by("created_at", direction=firestore.Query.DESCENDING)
+    if user_id:
+        q = q.where("user_id", "==", user_id)
+    docs = q.limit(limit).stream()
+    return [
+        {**doc.to_dict(), "id": doc.id}
+        for doc in docs
+    ]
+
