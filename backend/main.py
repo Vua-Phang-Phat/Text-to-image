@@ -18,7 +18,7 @@ from google.cloud import firestore
 from datetime import datetime
 from fastapi import Query
 # định nghĩa model lịch sử
-db = firestore.Client()
+db = firestore.Client(database="sql1999")
 HISTORY_COLLECTION = "search_history"
 
 
