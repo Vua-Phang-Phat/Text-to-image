@@ -96,7 +96,11 @@ def generate_image(req: ImageRequest):
             try:
                 image_base64 = result["predictions"][0]["bytesBase64Encoded"]
                 filename = f"{uuid.uuid4().hex}.png"
-                file_bytes = base64.b64decode(image_base64)
+                file_path = os.path.join(IMAGE_DIR, filename)
+                with open(file_path, "wb") as f:
+                    f.write(base64.b64decode(image_base64))
+                domain = os.environ.get('DOMAIN', 't2image-875771204141.us-central1.run.app')
+                download_url = f"https://{domain}/images/{filename}"
                 download_url = upload_to_bucket(file_bytes, filename)
                 save_search_history(req.prompt, download_url)
                 return {
