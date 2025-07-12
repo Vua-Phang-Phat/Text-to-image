@@ -145,3 +145,13 @@ def get_search_history(limit: int = Query(20), user_id: str = None):
         for doc in docs
     ]
 
+
+@app.delete("/search-history/{history_id}")
+def delete_search_history(history_id: str):
+    doc_ref = db.collection(HISTORY_COLLECTION).document(history_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Lịch sử không tồn tại")
+    doc_ref.delete()
+    return {"message": "Xóa lịch sử thành công"}
+
