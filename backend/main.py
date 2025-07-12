@@ -18,6 +18,7 @@ from google.cloud import storage
 from google.cloud import firestore
 from datetime import datetime
 from fastapi import Query
+
 # định nghĩa model lịch sử
 db = firestore.Client(database="sql1999")
 HISTORY_COLLECTION = "search_history"
@@ -92,20 +93,37 @@ def generate_image(req: ImageRequest):
         response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=60)
         if response.status_code == 200:
             result = response.json()
-            try:
-                image_base64 = result["predictions"][0]["bytesBase64Encoded"]
-                filename = f"{uuid.uuid4().hex}.png"
-                file_bytes = base64.b64decode(image_base64)
-                download_url = upload_to_bucket(file_bytes, filename)
-                save_search_history(req.prompt, download_url)
-                return {
-                    "image_base64": image_base64,
-                    "download_url": download_url,
-                    "share_url": download_url,
-                    "image_url": download_url,
-                }
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Lỗi đọc kết quả: {e}\n{result}")
+            # KIỂM TRA kỹ trường predictions
+            if (
+                isinstance(result, dict)
+                and "predictions" in result
+                and isinstance(result["predictions"], list)
+                and len(result["predictions"]) > 0
+                and "bytesBase64Encoded" in result["predictions"][0]
+                and result["predictions"][0]["bytesBase64Encoded"]
+            ):
+                try:
+                    image_base64 = result["predictions"][0]["bytesBase64Encoded"]
+                    filename = f"{uuid.uuid4().hex}.png"
+                    file_bytes = base64.b64decode(image_base64)
+                    download_url = upload_to_bucket(file_bytes, filename)
+                    save_search_history(req.prompt, download_url)
+                    return {
+                        "image_base64": image_base64,
+                        "download_url": download_url,
+                        "share_url": download_url,
+                        "image_url": download_url,
+                    }
+                except Exception as e:
+                    print("ERROR decode image:", e, result)
+                    raise HTTPException(status_code=500, detail=f"Lỗi đọc kết quả: {e}\n{result}")
+            else:
+                # Log lại kết quả trả về khi không đúng cấu trúc
+                print("API result thiếu predictions hoặc bị chặn prompt:", result)
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Không thể sinh ảnh với prompt này (có thể prompt bị chặn hoặc response không hợp lệ). Thông tin: {result}"
+                )
         else:
             raise HTTPException(status_code=response.status_code, detail=response.text)
 
@@ -116,6 +134,7 @@ def generate_image(req: ImageRequest):
             "mode": "demo",
             "message": f"Demo mode: {str(e)}"
         }
+
 def save_search_history(prompt, image_url, user_id=None):
     doc = {
         "prompt": prompt,
@@ -125,7 +144,6 @@ def save_search_history(prompt, image_url, user_id=None):
     if user_id:
         doc["user_id"] = user_id
     db.collection(HISTORY_COLLECTION).add(doc)
-
 
 @app.get("/download/{filename}")
 def download_image(filename: str):
@@ -145,7 +163,6 @@ def get_search_history(limit: int = Query(20), user_id: str = None):
         for doc in docs
     ]
 
-
 @app.delete("/search-history/{history_id}")
 def delete_search_history(history_id: str):
     doc_ref = db.collection(HISTORY_COLLECTION).document(history_id)
@@ -154,4 +171,3 @@ def delete_search_history(history_id: str):
         raise HTTPException(status_code=404, detail="Lịch sử không tồn tại")
     doc_ref.delete()
     return {"message": "Xóa lịch sử thành công"}
-
