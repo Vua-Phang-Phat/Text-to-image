@@ -18,6 +18,12 @@ from google.cloud import storage
 from google.cloud import firestore
 from datetime import datetime
 from fastapi import Query
+import firebase_admin
+from firebase_admin import credentials, auth
+from fastapi import FastAPI, Request, HTTPException, Depends
+
+# Nếu chạy trên Cloud Run GCP thì KHÔNG cần truyền file key
+firebase_admin.initialize_app()
 
 # định nghĩa model lịch sử
 db = firestore.Client(database="sql1999")
@@ -37,6 +43,19 @@ load_dotenv(dotenv_path='D:/T2I/backend/.env')
 DEMO_IMAGE_URL = "https://placehold.co/512x512/png?text=Demo+Image"
 
 app = FastAPI()
+# Hàm xác thực token gửi lên từ client
+def verify_token(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+
+    id_token = auth_header.split(" ")[1]
+    try:
+        decoded_token = auth.verify_id_token(id_token)
+        return decoded_token  # dict chứa uid, email, name, v.v.
+    except Exception as e:
+        print(f"Error verifying token: {e}")
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -171,3 +190,12 @@ def delete_search_history(history_id: str):
         raise HTTPException(status_code=404, detail="Lịch sử không tồn tại")
     doc_ref.delete()
     return {"message": "Xóa lịch sử thành công"}
+
+# Route mẫu bảo vệ bởi xác thực
+@app.get("/me")
+def get_me(user=Depends(verify_token)):
+    return {
+        "uid": user["uid"],
+        "email": user.get("email"),
+        "name": user.get("name")
+    }
