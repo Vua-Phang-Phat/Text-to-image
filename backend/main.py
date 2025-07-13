@@ -167,6 +167,16 @@ def save_search_history(prompt, image_url, user_id=None):
         doc["user_id"] = user_id
     db.collection(HISTORY_COLLECTION).add(doc)
 
+def save_user_info(user):
+    # user: dict trả về từ verify_token
+    user_doc = {
+        "uid": user["uid"],
+        "email": user.get("email"),
+        "name": user.get("name"),
+        "last_login": datetime.utcnow(),
+    }
+    db.collection("user").document(user["uid"]).set(user_doc, merge=True)
+
 @app.get("/download/{filename}")
 def download_image(filename: str):
     file_path = os.path.join(IMAGE_DIR, filename)
@@ -197,6 +207,7 @@ def delete_search_history(history_id: str):
 # Route mẫu bảo vệ bởi xác thực
 @app.get("/me")
 def get_me(user=Depends(verify_token)):
+    save_user_info(user) 
     return {
         "uid": user["uid"],
         "email": user.get("email"),
