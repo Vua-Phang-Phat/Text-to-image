@@ -22,8 +22,8 @@ import firebase_admin
 from firebase_admin import credentials, auth
 from fastapi import FastAPI, Request, HTTPException, Depends
 
-# Nếu chạy trên Cloud Run GCP thì KHÔNG cần truyền file key
-firebase_admin.initialize_app()
+if not firebase_admin._apps:
+    firebase_admin.initialize_app()
 
 # định nghĩa model lịch sử
 db = firestore.Client(database="sql1999")
@@ -45,17 +45,20 @@ DEMO_IMAGE_URL = "https://placehold.co/512x512/png?text=Demo+Image"
 app = FastAPI()
 # Hàm xác thực token gửi lên từ client
 def verify_token(request: Request):
-    auth_header = request.headers.get("Authorization")
+    auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-
-    id_token = auth_header.split(" ")[1]
+    try:
+        id_token = auth_header.split(" ")[1]
+    except Exception:
+        raise HTTPException(status_code=401, detail="Malformed Authorization header")
     try:
         decoded_token = auth.verify_id_token(id_token)
-        return decoded_token  # dict chứa uid, email, name, v.v.
+        return decoded_token
     except Exception as e:
         print(f"Error verifying token: {e}")
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+        raise HTTPException(status_code=401, detail=f"Invalid or expired token: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
