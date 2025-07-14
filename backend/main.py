@@ -95,6 +95,9 @@ def generate_image(req: ImageRequest):
 
         # Lấy credentials mặc định Cloud Run
         creds, project = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        print("DEBUG -- Request class:", Request)
+        print("DEBUG -- Request module:", Request.__module__)
+
         creds.refresh(Request())
         access_token = creds.token
 
