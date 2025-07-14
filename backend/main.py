@@ -11,7 +11,7 @@ import base64
 import uuid
 from langdetect import detect
 from googletrans import Translator
-from google.auth.transport.requests import Request as GoogleAuthRequest 
+from google.auth.transport.requests import Request
 from google.auth import default
 
 from google.cloud import storage
@@ -20,9 +20,7 @@ from datetime import datetime
 from fastapi import Query
 import firebase_admin
 from firebase_admin import credentials, auth
-from fastapi import FastAPI, HTTPException, Depends
-from fastapi import Request as FastAPIRequest
-
+from fastapi import FastAPI, Request, HTTPException, Depends
 
 if not firebase_admin._apps:
     firebase_admin.initialize_app()
@@ -97,10 +95,10 @@ def generate_image(req: ImageRequest):
 
         # Lấy credentials mặc định Cloud Run
         creds, project = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-        print("DEBUG -- Request class:", GoogleAuthRequest)
-        print("DEBUG -- Request module:", GoogleAuthRequest.__module__)
+        print("DEBUG -- Request class:", Request)
+        print("DEBUG -- Request module:", Request.__module__)
 
-        creds.refresh(GoogleAuthRequest())
+        creds.refresh(Request())
         access_token = creds.token
 
         url = "https://us-central1-aiplatform.googleapis.com/v1/projects/t2image-463005/locations/us-central1/publishers/google/models/imagegeneration:predict"
