@@ -12,6 +12,8 @@ import uuid
 from langdetect import detect
 from googletrans import Translator
 from google.auth.transport.requests import Request
+from google.auth.transport.requests import Request as GoogleAuthRequest
+from fastapi import Request as FastAPIRequest
 from google.auth import default
 
 from google.cloud import storage
@@ -20,7 +22,7 @@ from datetime import datetime
 from fastapi import Query
 import firebase_admin
 from firebase_admin import credentials, auth
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends
 
 if not firebase_admin._apps:
     firebase_admin.initialize_app()
@@ -44,7 +46,7 @@ DEMO_IMAGE_URL = "https://placehold.co/512x512/png?text=Demo+Image"
 
 app = FastAPI()
 # Hàm xác thực token gửi lên từ client
-def verify_token(request: Request):
+def verify_token(request: FastAPIRequest):
     auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
@@ -95,10 +97,10 @@ def generate_image(req: ImageRequest):
 
         # Lấy credentials mặc định Cloud Run
         creds, project = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-        print("DEBUG -- Request class:", Request)
-        print("DEBUG -- Request module:", Request.__module__)
+        print("DEBUG -- Request class:", type(GoogleAuthRequest()))
+        print("DEBUG -- Request module:", type(GoogleAuthRequest()).__module__)
 
-        creds.refresh(Request())
+        creds.refresh(GoogleAuthRequest())
         access_token = creds.token
 
         url = "https://us-central1-aiplatform.googleapis.com/v1/projects/t2image-463005/locations/us-central1/publishers/google/models/imagegeneration:predict"
