@@ -45,6 +45,26 @@ load_dotenv(dotenv_path='D:/T2I/backend/.env')
 DEMO_IMAGE_URL = "https://placehold.co/512x512/png?text=Demo+Image"
 
 app = FastAPI()
+
+# ====== HÀM ĐỒNG BỘ USER VÀO FIRESTORE (CHỈ THÊM MỚI, KHÔNG SỬA CODE CŨ) ======
+def sync_user_to_firestore(user_info):
+    db = firestore.Client()
+    users_ref = db.collection("users")
+    doc_ref = users_ref.document(user_info["uid"])
+    now = datetime.utcnow()
+    doc = doc_ref.get()
+
+    if not doc.exists:
+        doc_ref.set({
+            "uid": user_info["uid"],
+            "email": user_info.get("email"),
+            "role": "user",      # mặc định là user
+            "status": "active",  # mặc định là active
+            "created_at": now,
+            "last_login": now
+        })
+    else:
+        doc_ref.update({"last_login": now})
 # Hàm xác thực token gửi lên từ client
 def verify_token(request: FastAPIRequest):
     auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
@@ -56,6 +76,13 @@ def verify_token(request: FastAPIRequest):
         raise HTTPException(status_code=401, detail="Malformed Authorization header")
     try:
         decoded_token = auth.verify_id_token(id_token)
+        # ======= THÊM ĐOẠN ĐỒNG BỘ USER VÀO FIRESTORE NGAY SAU KHI XÁC THỰC =======
+        user_info = {
+            "uid": decoded_token["uid"],
+            "email": decoded_token.get("email"),
+        }
+        sync_user_to_firestore(user_info)
+        
         return decoded_token
     except Exception as e:
         print(f"Error verifying token: {e}")
