@@ -133,7 +133,7 @@ def prompt_to_english(prompt: str) -> str:
         print("Langdetect error:", e)
         return prompt
 
-@app.post("/generate-image", dependencies=[Depends(verify_token)])
+@app.post("/generate-image")
 def generate_image(req: ImageRequest):
     try:
         prompt_en = prompt_to_english(req.prompt)
