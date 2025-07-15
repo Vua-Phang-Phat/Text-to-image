@@ -85,6 +85,7 @@ def verify_token(request: FastAPIRequest):
         # LẤY THÔNG TIN USER TỪ FIRESTORE
         users_ref = db.collection("users")
         doc = users_ref.document(decoded_token["uid"]).get()
+        status = doc.to_dict().get("status", "active")
         if not doc.exists:
             # Mặc định nếu không có document thì active
             pass
@@ -134,7 +135,7 @@ def prompt_to_english(prompt: str) -> str:
         return prompt
 
 @app.post("/generate-image")
-def generate_image(req: ImageRequest):
+def generate_image(req: ImageRequest, user=Depends(verify_token)):
     try:
         prompt_en = prompt_to_english(req.prompt)
 
