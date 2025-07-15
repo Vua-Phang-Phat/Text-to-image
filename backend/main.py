@@ -68,10 +68,12 @@ def sync_user_to_firestore(user_info):
 # Hàm xác thực token gửi lên từ client
 def verify_token(request: FastAPIRequest):
     auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
+    print("auth_header:", auth_header) 
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     try:
         id_token = auth_header.split(" ")[1]
+        print("id_token:", id_token[:20], '...')  # Không in hết, chỉ để debug
     except Exception:
         raise HTTPException(status_code=401, detail="Malformed Authorization header")
     try:
