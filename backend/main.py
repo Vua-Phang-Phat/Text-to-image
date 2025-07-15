@@ -48,7 +48,7 @@ app = FastAPI()
 
 # ====== HÀM ĐỒNG BỘ USER VÀO FIRESTORE (CHỈ THÊM MỚI, KHÔNG SỬA CODE CŨ) ======
 def sync_user_to_firestore(user_info):
-    db = firestore.Client()
+    db = firestore.Client(database="sql1999")
     users_ref = db.collection("users")
     doc_ref = users_ref.document(user_info["uid"])
     now = datetime.utcnow()
@@ -82,7 +82,7 @@ def verify_token(request: FastAPIRequest):
             "email": decoded_token.get("email"),
         }
         sync_user_to_firestore(user_info)
-        
+
         return decoded_token
     except Exception as e:
         print(f"Error verifying token: {e}")
