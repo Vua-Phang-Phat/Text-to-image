@@ -272,11 +272,18 @@ class UpdateStatusRequest(BaseModel):
 
 @app.post("/users/{uid}/status")
 def update_user_status(uid: str, data: UpdateStatusRequest, user=Depends(verify_token)):
+    users_ref = db.collection("users")
+    # Kiểm tra current user có phải admin không
+    current_uid = user["uid"]
+    me = users_ref.document(current_uid).get()
+    if not me.exists or me.to_dict().get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Bạn không có quyền phân quyền")
     # tương tự check admin, rồi:
-    doc_ref = db.collection("users").document(uid)
+    doc_ref = users_ref.document(uid)
     doc = doc_ref.get()
     if not doc.exists:
-        raise HTTPException(404, "Không tìm thấy user")
+         raise HTTPException(status_code=404, detail="Không tìm thấy user")
+    # cập nhật status
     doc_ref.update({"status": data.status})
     return {"message": f"Đã đổi status thành {data.status}"}
 
