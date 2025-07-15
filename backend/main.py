@@ -48,7 +48,7 @@ app = FastAPI()
 
 # ====== HÀM ĐỒNG BỘ USER VÀO FIRESTORE (CHỈ THÊM MỚI, KHÔNG SỬA CODE CŨ) ======
 def sync_user_to_firestore(user_info):
-    db = firestore.Client(database="sql1999")
+    print("SYNC USER TO FIRESTORE:", user_info)
     users_ref = db.collection("users")
     doc_ref = users_ref.document(user_info["uid"])
     now = datetime.utcnow()
