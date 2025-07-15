@@ -365,3 +365,27 @@ def get_billing(user=Depends(verify_token)):
         "status": billing.get("status", "active")
     }
 
+class UpdateQuotaRequest(BaseModel):
+    quota: int
+    total_quota: int
+    plan: str
+    expire_at: datetime  # Firestore lưu datetime, frontend gửi lên dạng ISO 8601
+
+@app.post("/users/{uid}/quota")
+def update_user_quota(uid: str, data: UpdateQuotaRequest, user=Depends(verify_token)):
+    users_ref = db.collection("users")
+    current_uid = user["uid"]
+    me = users_ref.document(current_uid).get()
+    if not me.exists or me.to_dict().get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Bạn không có quyền chỉnh quota")
+    doc_ref = users_ref.document(uid)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Không tìm thấy user")
+    doc_ref.update({
+        "quota": data.quota,
+        "total_quota": data.total_quota,
+        "plan": data.plan,
+        "expire_at": data.expire_at
+    })
+    return {"message": "Đã cập nhật quota/user thành công"}
