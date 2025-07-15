@@ -82,8 +82,24 @@ def verify_token(request: FastAPIRequest):
             "email": decoded_token.get("email"),
         }
         sync_user_to_firestore(user_info)
+        # LẤY THÔNG TIN USER TỪ FIRESTORE
+        users_ref = db.collection("users")
+        doc = users_ref.document(decoded_token["uid"]).get()
+        if not doc.exists:
+            # Mặc định nếu không có document thì active
+            pass
+        else:
+            status = doc.to_dict().get("status", "active")
+            if status != "active":
+                # Nếu status blocked (hoặc bất kỳ giá trị nào != active) => cấm truy cập
+                raise HTTPException(status_code=403, detail="Tài khoản đang bị khóa")
 
         return decoded_token
+        
+    except HTTPException:
+        # Nếu đã tự raise HTTPException ở trên thì pass tiếp
+        raise
+
     except Exception as e:
         print(f"Error verifying token: {e}")
         raise HTTPException(status_code=401, detail=f"Invalid or expired token: {e}")
