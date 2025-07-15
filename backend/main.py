@@ -95,7 +95,7 @@ def verify_token(request: FastAPIRequest):
                 raise HTTPException(status_code=403, detail="Tài khoản đang bị khóa")
 
         return decoded_token
-        
+
     except HTTPException:
         # Nếu đã tự raise HTTPException ở trên thì pass tiếp
         raise
@@ -133,7 +133,7 @@ def prompt_to_english(prompt: str) -> str:
         print("Langdetect error:", e)
         return prompt
 
-@app.post("/generate-image")
+@app.post("/generate-image", dependencies=[Depends(verify_token)])
 def generate_image(req: ImageRequest):
     try:
         prompt_en = prompt_to_english(req.prompt)
