@@ -18,7 +18,7 @@ from google.auth import default
 
 from google.cloud import storage
 from google.cloud import firestore
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import Query
 import firebase_admin
 from firebase_admin import credentials, auth
