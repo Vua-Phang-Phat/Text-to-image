@@ -164,8 +164,15 @@ def check_billing(uid):
         raise HTTPException(status_code=403, detail="Tài khoản bị khoá")
     if user.get("quota", 0) <= 0:
         raise HTTPException(status_code=402, detail="Bạn đã hết lượt sử dụng. Vui lòng nâng cấp hoặc chờ reset quota.")
-    if "expire_at" in user and user["expire_at"] < datetime.utcnow():
-        raise HTTPException(status_code=402, detail="Gói của bạn đã hết hạn.")
+    # Fix ở đây:
+    if "expire_at" in user:
+        expire_at = user["expire_at"]
+        # Nếu expire_at là kiểu datetime và có timezone (offset-aware)
+        now = datetime.now(timezone.utc)
+        if expire_at.tzinfo is None:
+            expire_at = expire_at.replace(tzinfo=timezone.utc)
+        if expire_at < now:
+            raise HTTPException(status_code=402, detail="Gói của bạn đã hết hạn.")
     return user
 
 @app.post("/generate-image")
