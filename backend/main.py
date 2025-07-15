@@ -235,3 +235,33 @@ def get_me(user=Depends(verify_token)):
         "email": user.get("email"),
         "name": user.get("name")
     }
+
+# API: Lấy danh sách user (chỉ cho admin)
+@app.get("/users")
+def list_users(user=Depends(verify_token)):
+    users_ref = db.collection("users")
+    current_uid = user["uid"]
+    me = users_ref.document(current_uid).get()
+    if not me.exists or me.to_dict().get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Bạn không có quyền truy cập")
+    docs = users_ref.limit(100).stream()
+    return [{**doc.to_dict(), "id": doc.id} for doc in docs]
+
+
+# API: Đổi quyền user (chỉ cho admin)
+class UpdateRoleRequest(BaseModel):
+    role: str
+
+@app.post("/users/{uid}/role")
+def update_user_role(uid: str, data: UpdateRoleRequest, user=Depends(verify_token)):
+    users_ref = db.collection("users")
+    current_uid = user["uid"]
+    me = users_ref.document(current_uid).get()
+    if not me.exists or me.to_dict().get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Bạn không có quyền phân quyền")
+    doc_ref = users_ref.document(uid)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Không tìm thấy user")
+    doc_ref.update({"role": data.role})
+    return {"message": f"Đã đổi role user {uid} thành {data.role}"}
