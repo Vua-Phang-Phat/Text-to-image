@@ -135,7 +135,7 @@ def prompt_to_english(prompt: str) -> str:
         return prompt
 
 @app.post("/generate-image")
-def generate_image(req: ImageRequest):
+def generate_image(req: ImageRequest, user=Depends(verify_token)):
     try:
         prompt_en = prompt_to_english(req.prompt)
 
