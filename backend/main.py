@@ -61,10 +61,25 @@ def sync_user_to_firestore(user_info):
             "role": "user",      # mặc định là user
             "status": "active",  # mặc định là active
             "created_at": now,
-            "last_login": now
+            "last_login": now,
+            # Billing field:
+            "plan": "free",
+            "quota": 1,
+            "total_quota": 3,
+            "expire_at": now + timedelta(days=30),
         })
     else:
-        doc_ref.update({"last_login": now})
+        # Chỉ thêm billing nếu chưa có (tránh ghi đè user cũ)
+        data = doc.to_dict()
+        update_data = {"last_login": now}
+        if "plan" not in data:
+            update_data.update({
+                "plan": "free",
+                "quota": 1,
+                "total_quota": 3,
+                "expire_at": now + timedelta(days=30),
+            })
+        doc_ref.update(update_data)
 # Hàm xác thực token gửi lên từ client
 def verify_token(request: FastAPIRequest):
     auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
@@ -139,8 +154,24 @@ def prompt_to_english(prompt: str) -> str:
         print("Langdetect error:", e)
         return prompt
 
+def check_billing(uid):
+    users_ref = db.collection('users')
+    user_doc = users_ref.document(uid).get()
+    if not user_doc.exists:
+        raise HTTPException(status_code=401, detail="Không tìm thấy user")
+    user = user_doc.to_dict()
+    if user.get("status", "active") != "active":
+        raise HTTPException(status_code=403, detail="Tài khoản bị khoá")
+    if user.get("quota", 0) <= 0:
+        raise HTTPException(status_code=402, detail="Bạn đã hết lượt sử dụng. Vui lòng nâng cấp hoặc chờ reset quota.")
+    if "expire_at" in user and user["expire_at"] < datetime.utcnow():
+        raise HTTPException(status_code=402, detail="Gói của bạn đã hết hạn.")
+    return user
+
 @app.post("/generate-image")
 def generate_image(req: ImageRequest, user=Depends(verify_token)):
+    # 1. Kiểm tra billing/quota trước khi xử lý prompt
+    billing_user = check_billing(user['uid'])
     try:
         prompt_en = prompt_to_english(req.prompt)
 
@@ -184,6 +215,8 @@ def generate_image(req: ImageRequest, user=Depends(verify_token)):
                     file_bytes = base64.b64decode(image_base64)
                     download_url = upload_to_bucket(file_bytes, filename)
                     save_search_history(req.prompt, download_url)
+                    users_ref = db.collection('users')
+                    users_ref.document(user['uid']).update({"quota": billing_user["quota"] - 1})
                     return {
                         "image_base64": image_base64,
                         "download_url": download_url,
@@ -220,6 +253,7 @@ def save_search_history(prompt, image_url, user_id=None):
     if user_id:
         doc["user_id"] = user_id
     db.collection(HISTORY_COLLECTION).add(doc)
+
 
 
 @app.get("/download/{filename}")
@@ -308,4 +342,19 @@ def update_user_status(uid: str, data: UpdateStatusRequest, user=Depends(verify_
     # cập nhật status
     doc_ref.update({"status": data.status})
     return {"message": f"Đã đổi status thành {data.status}"}
+
+
+@app.get("/me/billing")
+def get_billing(user=Depends(verify_token)):
+    doc = db.collection("users").document(user["uid"]).get()
+    if not doc.exists:
+        raise HTTPException(status_code=401, detail="User không tồn tại")
+    billing = doc.to_dict()
+    return {
+        "plan": billing.get("plan", "free"),
+        "quota": billing.get("quota", 0),
+        "total_quota": billing.get("total_quota", 0),
+        "expire_at": billing.get("expire_at"),
+        "status": billing.get("status", "active")
+    }
 
