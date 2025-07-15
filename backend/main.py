@@ -265,3 +265,18 @@ def update_user_role(uid: str, data: UpdateRoleRequest, user=Depends(verify_toke
         raise HTTPException(status_code=404, detail="Không tìm thấy user")
     doc_ref.update({"role": data.role})
     return {"message": f"Đã đổi role user {uid} thành {data.role}"}
+
+# Model cho cập nhật status
+class UpdateStatusRequest(BaseModel):
+    status: str  # "active" hoặc "blocked"
+
+@app.post("/users/{uid}/status")
+def update_user_status(uid: str, data: UpdateStatusRequest, user=Depends(verify_token)):
+    # tương tự check admin, rồi:
+    doc_ref = db.collection("users").document(uid)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(404, "Không tìm thấy user")
+    doc_ref.update({"status": data.status})
+    return {"message": f"Đã đổi status thành {data.status}"}
+
