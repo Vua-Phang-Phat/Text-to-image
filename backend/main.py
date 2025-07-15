@@ -64,8 +64,8 @@ def sync_user_to_firestore(user_info):
             "last_login": now,
             # Billing field:
             "plan": "free",
-            "quota": 1,
-            "total_quota": 3,
+            "quota": 100,
+            "total_quota": 100,
             "expire_at": now + timedelta(days=30),
         })
     else:
@@ -75,8 +75,8 @@ def sync_user_to_firestore(user_info):
         if "plan" not in data:
             update_data.update({
                 "plan": "free",
-                "quota": 1,
-                "total_quota": 3,
+                "quota": 100,
+                "total_quota": 100,
                 "expire_at": now + timedelta(days=30),
             })
         doc_ref.update(update_data)
