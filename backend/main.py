@@ -85,14 +85,17 @@ def verify_token(request: FastAPIRequest):
         # LẤY THÔNG TIN USER TỪ FIRESTORE
         users_ref = db.collection("users")
         doc = users_ref.document(decoded_token["uid"]).get()
-        print("doc.exists:", doc.exists, "doc:", doc.to_dict())
+        print("doc.exists:", doc.exists)
         if not doc.exists:
-            # Mặc định nếu không có document thì active
-            pass
+            print("Không có document user trong Firestore, mặc định là active.")
+    # Không raise lỗi, coi như user chưa bị block
         else:
-            status = doc.to_dict().get("status", "active")
+            doc_dict = doc.to_dict()
+            print("doc_dict:", doc_dict)
+            status = doc_dict.get("status", "active")
+            print("User status từ Firestore:", status)
             if status != "active":
-                # Nếu status blocked (hoặc bất kỳ giá trị nào != active) => cấm truy cập
+                print("==> User bị block, raise HTTPException!")
                 raise HTTPException(status_code=403, detail="Tài khoản đang bị khóa")
 
         return decoded_token
