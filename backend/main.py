@@ -274,6 +274,7 @@ def download_image(filename: str):
 
 @app.get("/search-history")
 def get_search_history(limit: int = Query(20), user_id: str = None):
+    print("Received user_id:", user_id)
     q = db.collection(HISTORY_COLLECTION).order_by("created_at", direction=firestore.Query.DESCENDING)
     if user_id:
         q = q.where("user_id", "==", user_id)
