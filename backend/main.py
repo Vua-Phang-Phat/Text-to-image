@@ -389,3 +389,13 @@ def update_user_quota(uid: str, data: UpdateQuotaRequest, user=Depends(verify_to
         "expire_at": data.expire_at
     })
     return {"message": "Đã cập nhật quota/user thành công"}
+
+#kiếm tra quyền admin bằng uid
+@app.get("/users/{uid}")
+def get_user_by_id(uid: str, user=Depends(verify_token)):
+    users_ref = db.collection("users")
+    # Ai cũng được quyền xem user, hoặc tuỳ bạn muốn kiểm tra quyền thì bổ sung
+    doc = users_ref.document(uid).get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Không tìm thấy user")
+    return doc.to_dict()
