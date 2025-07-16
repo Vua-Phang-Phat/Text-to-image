@@ -221,7 +221,9 @@ def generate_image(req: ImageRequest, user=Depends(verify_token)):
                     filename = f"{uuid.uuid4().hex}.png"
                     file_bytes = base64.b64decode(image_base64)
                     download_url = upload_to_bucket(file_bytes, filename)
-                    save_search_history(req.prompt, download_url)
+                    # ==== SỬA DÒNG NÀY ====
+                    save_search_history(req.prompt, download_url, user['uid'])
+                    #==================================================
                     users_ref = db.collection('users')
                     users_ref.document(user['uid']).update({"quota": billing_user["quota"] - 1})
                     return {
@@ -282,13 +284,20 @@ def get_search_history(limit: int = Query(20), user_id: str = None):
     ]
 
 @app.delete("/search-history/{history_id}")
-def delete_search_history(history_id: str):
+def delete_search_history(history_id: str, user=Depends(verify_token)):
     doc_ref = db.collection(HISTORY_COLLECTION).document(history_id)
     doc = doc_ref.get()
     if not doc.exists:
         raise HTTPException(status_code=404, detail="Lịch sử không tồn tại")
+    
+    doc_data = doc.to_dict()
+    # Kiểm tra quyền sở hữu
+    if doc_data.get("user_id") != user["uid"]:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền xóa lịch sử này")
+    
     doc_ref.delete()
     return {"message": "Xóa lịch sử thành công"}
+
 
 # Route mẫu bảo vệ bởi xác thực
 @app.get("/me")
