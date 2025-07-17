@@ -31,7 +31,7 @@ if not firebase_admin._apps:
 db = firestore.Client(database="sql1999")
 HISTORY_COLLECTION = "search_history"
 
-BUCKET_NAME = "t2image-bucket"  # Tên bucket bạn đã tạo trên Cloud Storage
+BUCKET_NAME = "t2image-bucket"  
 def upload_to_bucket(file_bytes, filename, bucket_name=BUCKET_NAME):
     client = storage.Client()
     bucket = client.bucket(bucket_name)
@@ -46,7 +46,6 @@ DEMO_IMAGE_URL = "https://placehold.co/512x512/png?text=Demo+Image"
 
 app = FastAPI()
 
-# ====== HÀM ĐỒNG BỘ USER VÀO FIRESTORE (CHỈ THÊM MỚI, KHÔNG SỬA CODE CŨ) ======
 def sync_user_to_firestore(user_info):
     print("SYNC USER TO FIRESTORE:", user_info)
     users_ref = db.collection("users")
@@ -58,25 +57,23 @@ def sync_user_to_firestore(user_info):
         doc_ref.set({
             "uid": user_info["uid"],
             "email": user_info.get("email"),
-            "role": "user",      # mặc định là user
-            "status": "active",  # mặc định là active
+            "role": "user",      
+            "status": "active",  
             "created_at": now,
             "last_login": now,
-            # Billing field:
             "plan": "free",
-            "quota": 100,
-            "total_quota": 100,
+            "quota": 10,
+            "total_quota": 10,
             "expire_at": now + timedelta(days=30),
         })
     else:
-        # Chỉ thêm billing nếu chưa có (tránh ghi đè user cũ)
         data = doc.to_dict()
         update_data = {"last_login": now}
         if "plan" not in data:
             update_data.update({
                 "plan": "free",
-                "quota": 100,
-                "total_quota": 100,
+                "quota": 10,
+                "total_quota": 10,
                 "expire_at": now + timedelta(days=30),
             })
         doc_ref.update(update_data)
@@ -88,24 +85,24 @@ def verify_token(request: FastAPIRequest):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     try:
         id_token = auth_header.split(" ")[1]
-        print("id_token:", id_token[:20], '...')  # Không in hết, chỉ để debug
+        print("id_token:", id_token[:20], '...')  
     except Exception:
         raise HTTPException(status_code=401, detail="Malformed Authorization header")
     try:
         decoded_token = auth.verify_id_token(id_token)
-        # ======= THÊM ĐOẠN ĐỒNG BỘ USER VÀO FIRESTORE NGAY SAU KHI XÁC THỰC =======
+        
         user_info = {
             "uid": decoded_token["uid"],
             "email": decoded_token.get("email"),
         }
         sync_user_to_firestore(user_info)
-        # LẤY THÔNG TIN USER TỪ FIRESTORE
+        
         users_ref = db.collection("users")
         doc = users_ref.document(decoded_token["uid"]).get()
         print("doc.exists:", doc.exists)
         if not doc.exists:
             print("Không có document user trong Firestore, mặc định là active.")
-    # Không raise lỗi, coi như user chưa bị block
+    
         else:
             doc_dict = doc.to_dict()
             print("doc_dict:", doc_dict)
@@ -118,7 +115,7 @@ def verify_token(request: FastAPIRequest):
         return decoded_token
 
     except HTTPException:
-        # Nếu đã tự raise HTTPException ở trên thì pass tiếp
+        
         raise
 
     except Exception as e:
@@ -164,10 +161,8 @@ def check_billing(uid):
         raise HTTPException(status_code=403, detail="Tài khoản bị khoá")
     if user.get("quota", 0) <= 0:
         raise HTTPException(status_code=402, detail="Bạn đã hết lượt sử dụng. Vui lòng nâng cấp hoặc chờ reset quota.")
-    # Fix ở đây:
     if "expire_at" in user:
         expire_at = user["expire_at"]
-        # Nếu expire_at là kiểu datetime và có timezone (offset-aware)
         now = datetime.now(timezone.utc)
         if expire_at.tzinfo is None:
             expire_at = expire_at.replace(tzinfo=timezone.utc)
@@ -177,7 +172,7 @@ def check_billing(uid):
 
 @app.post("/generate-image")
 def generate_image(req: ImageRequest, user=Depends(verify_token)):
-    # 1. Kiểm tra billing/quota trước khi xử lý prompt
+    # Kiểm tra billing/quota trước khi xử lý prompt
     billing_user = check_billing(user['uid'])
     try:
         prompt_en = prompt_to_english(req.prompt)
@@ -207,7 +202,7 @@ def generate_image(req: ImageRequest, user=Depends(verify_token)):
         response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=60)
         if response.status_code == 200:
             result = response.json()
-            # KIỂM TRA kỹ trường predictions
+            # KIỂM TRA  trường predictions
             if (
                 isinstance(result, dict)
                 and "predictions" in result
@@ -221,9 +216,9 @@ def generate_image(req: ImageRequest, user=Depends(verify_token)):
                     filename = f"{uuid.uuid4().hex}.png"
                     file_bytes = base64.b64decode(image_base64)
                     download_url = upload_to_bucket(file_bytes, filename)
-                    # ==== SỬA DÒNG NÀY ====
+                    
                     save_search_history(req.prompt, download_url, user['uid'])
-                    #==================================================
+                    
                     users_ref = db.collection('users')
                     users_ref.document(user['uid']).update({"quota": billing_user["quota"] - 1})
                     return {
@@ -236,7 +231,7 @@ def generate_image(req: ImageRequest, user=Depends(verify_token)):
                     print("ERROR decode image:", e, result)
                     raise HTTPException(status_code=500, detail=f"Lỗi đọc kết quả: {e}\n{result}")
             else:
-                # Log lại kết quả trả về khi không đúng cấu trúc
+                
                 print("API result thiếu predictions hoặc bị chặn prompt:", result)
                 raise HTTPException(
                     status_code=400,
@@ -292,7 +287,7 @@ def delete_search_history(history_id: str, user=Depends(verify_token)):
         raise HTTPException(status_code=404, detail="Lịch sử không tồn tại")
     
     doc_data = doc.to_dict()
-    # Kiểm tra quyền sở hữu
+    
     if doc_data.get("user_id") != user["uid"]:
         raise HTTPException(status_code=403, detail="Bạn không có quyền xóa lịch sử này")
     
@@ -300,7 +295,7 @@ def delete_search_history(history_id: str, user=Depends(verify_token)):
     return {"message": "Xóa lịch sử thành công"}
 
 
-# Route mẫu bảo vệ bởi xác thực
+
 @app.get("/me")
 def get_me(user=Depends(verify_token)):
     return {
@@ -321,7 +316,7 @@ def list_users(user=Depends(verify_token)):
     return [{**doc.to_dict(), "id": doc.id} for doc in docs]
 
 
-# API: Đổi quyền user (chỉ cho admin)
+
 class UpdateRoleRequest(BaseModel):
     role: str
 
@@ -339,24 +334,24 @@ def update_user_role(uid: str, data: UpdateRoleRequest, user=Depends(verify_toke
     doc_ref.update({"role": data.role})
     return {"message": f"Đã đổi role user {uid} thành {data.role}"}
 
-# Model cho cập nhật status
+
 class UpdateStatusRequest(BaseModel):
-    status: str  # "active" hoặc "blocked"
+    status: str  
 
 @app.post("/users/{uid}/status")
 def update_user_status(uid: str, data: UpdateStatusRequest, user=Depends(verify_token)):
     users_ref = db.collection("users")
-    # Kiểm tra current user có phải admin không
+    
     current_uid = user["uid"]
     me = users_ref.document(current_uid).get()
     if not me.exists or me.to_dict().get("role") != "admin":
         raise HTTPException(status_code=403, detail="Bạn không có quyền phân quyền")
-    # tương tự check admin, rồi:
+    
     doc_ref = users_ref.document(uid)
     doc = doc_ref.get()
     if not doc.exists:
          raise HTTPException(status_code=404, detail="Không tìm thấy user")
-    # cập nhật status
+    
     doc_ref.update({"status": data.status})
     return {"message": f"Đã đổi status thành {data.status}"}
 
@@ -379,7 +374,7 @@ class UpdateQuotaRequest(BaseModel):
     quota: int
     total_quota: int
     plan: str
-    expire_at: datetime  # Firestore lưu datetime, frontend gửi lên dạng ISO 8601
+    expire_at: datetime  
 
 @app.post("/users/{uid}/quota")
 def update_user_quota(uid: str, data: UpdateQuotaRequest, user=Depends(verify_token)):
@@ -400,11 +395,10 @@ def update_user_quota(uid: str, data: UpdateQuotaRequest, user=Depends(verify_to
     })
     return {"message": "Đã cập nhật quota/user thành công"}
 
-#kiếm tra quyền admin bằng uid
+
 @app.get("/users/{uid}")
 def get_user_by_id(uid: str, user=Depends(verify_token)):
     users_ref = db.collection("users")
-    # Ai cũng được quyền xem user, hoặc tuỳ bạn muốn kiểm tra quyền thì bổ sung
     doc = users_ref.document(uid).get()
     if not doc.exists:
         raise HTTPException(status_code=404, detail="Không tìm thấy user")
